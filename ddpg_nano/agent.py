@@ -35,7 +35,7 @@ class DDPG:
         # Noise process
         self.exploration_mu = 0.0
         self.exploration_theta = 0.15
-        self.exploration_sigma = 0.3
+        self.exploration_sigma = 0.01
         self.noise = OUNoise(self.action_size, self.exploration_mu, self.exploration_theta, self.exploration_sigma)
 
         # Replay memory
@@ -87,7 +87,7 @@ class DDPG:
             noise = self.noise.sample()
 
         # Cap rotor speeds to action low and high
-        action = np.clip((raw_action + raw_action), self.action_low + 1e-5, self.action_high)
+        action = np.clip((raw_action * (1 + noise)), self.action_low + 1e-5, self.action_high)
         return action
 
     def learn(self, experiences):

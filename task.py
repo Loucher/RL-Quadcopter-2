@@ -55,7 +55,7 @@ class Task():
 
         # print([reward, distance, unsafe_rotations, speed, hit_ground, rotor_speed_deviations])
         return reward - distance * 0.005 - unsafe_rotations * 0.01 - speed * 0.01 - hit_ground * 100 - \
-               rotor_speed_deviations * 0.001
+               rotor_speed_deviations * 0.01
 
     def step(self, rotor_speeds):
         """Uses action to obtain next state, reward, done."""
