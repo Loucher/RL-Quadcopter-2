@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 
 from physics_sim import PhysicsSim
@@ -31,40 +33,39 @@ class Task():
 
     def get_reward(self):
         """Uses current pose of sim to return reward."""
+        # Base reward
+        reward = 0
 
-        # Set base reward
-        reward = 10
-
-        # Distance Penalty
-        distance = (np.linalg.norm(self.sim.pose[:3] - self.target_pos)) ** 2
-
-        # Penalty for big (probably) unsafe rotations
-        unsafe_rotations = abs(self.sim.angular_v).sum()
-
-        # Penalty for going too fast
-        speed = abs(self.sim.v).sum()
-
-        # Penalty for hitting ground
-        hit_ground = 0
+        # Heavy penalization for hitting ground
         if self.sim.pose[2] <= 0:
-            hit_ground = 1
+            reward -= 2
             self.sim.done = True
 
-        # Penalty for big differences in rotor speeds
-        rotor_speed_deviations = np.std(self.rotor_speeds)
+        previous_distance = np.linalg.norm(self.previous_pose[:3] - self.target_pos)
+        current_distance = np.linalg.norm(self.sim.pose[:3] - self.target_pos)
 
-        # print([reward, distance, unsafe_rotations, speed, hit_ground, rotor_speed_deviations])
-        return reward - distance * 0.005 - unsafe_rotations * 0.01 - speed * 0.01 - hit_ground * 100 - \
-               rotor_speed_deviations * 0.01
+        # Bonus reward if drone is close enough
+        if current_distance < 1:
+            reward += 1
+            self.sim.done = True
+
+        # Reward/Penalty for distance change
+        reward += previous_distance - current_distance
+
+        return reward, self.sim.done
 
     def step(self, rotor_speeds):
         """Uses action to obtain next state, reward, done."""
         reward = 0
+        self.previous_pose = copy.copy(self.sim.pose)
         pose_all = []
         self.rotor_speeds = rotor_speeds
         for _ in range(self.action_repeat):
             done = self.sim.next_timestep(rotor_speeds)  # update the sim pose and velocities
-            reward += self.get_reward()
+            new_reward, new_done = self.get_reward()
+            reward += new_reward
+            if new_done:
+                done = True
             pose_all.append(self.sim.pose)
         next_state = np.concatenate(pose_all)
         return next_state, reward, done

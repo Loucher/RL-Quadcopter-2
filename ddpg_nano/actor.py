@@ -1,10 +1,14 @@
-import tensorflow as tf
+import tensorflow.keras.backend as backend
+import tensorflow.keras.initializers as initializers
+import tensorflow.keras.layers as layers
+import tensorflow.keras.models as models
+import tensorflow.keras.optimizers as optimizers
 
 
 class Actor:
     """Actor (Policy) Model."""
 
-    def __init__(self, state_size, action_size, action_low, action_high):
+    def __init__(self, state_size, action_size, action_low, action_high, units=[64, 128]):
         """Initialize parameters and build model.
 
         Params
@@ -21,54 +25,42 @@ class Actor:
         self.action_range = self.action_high - self.action_low
 
         # Initialize any other variables here
-
+        self.units = units
         self.build_model()
 
     def build_model(self):
         """Build an actor (policy) network that maps states -> actions."""
         # Define input layer (states)
-        states = tf.keras.Input(shape=(self.state_size,), name='states')
+        states = layers.Input(shape=(self.state_size,), name='states')
 
         # Add hidden layers
-        net_states = tf.keras.layers.Dense(
-            units=300,
-            activation='relu',
-            kernel_regularizer=tf.keras.regularizers.l2(0.01),
-            activity_regularizer=tf.keras.regularizers.l1(0.01)
-        )(states)
-        net_states = tf.keras.layers.Dense(
-            units=400,
-            activation='relu',
-            kernel_regularizer=tf.keras.regularizers.l2(0.01),
-            activity_regularizer=tf.keras.regularizers.l1(0.01)
-        )(net_states)
+        net = layers.Dense(units=self.units[0], activation='relu')(states)
+        net = layers.Dense(units=self.units[1], activation='relu')(net)
+        net = layers.Dense(units=self.units[0], activation='relu')(net)
 
         # Try different layer sizes, activations, add batch normalization, regularizers, etc.
 
         # Add final output layer with sigmoid activation
-        raw_actions = tf.keras.layers.Dense(units=self.action_size, activation='sigmoid',
-                                            name='raw_actions')(net_states)
+        raw_actions = layers.Dense(units=self.action_size, activation='sigmoid', name='raw_actions',
+                                   kernel_initializer=initializers.RandomUniform(minval=-1, maxval=1))(net)
 
         # Scale [0, 1] output for each action dimension to proper range
-        actions = tf.keras.layers.Lambda(lambda x: (x * self.action_range) + self.action_low,
-                                         name='actions')(raw_actions)
+        actions = layers.Lambda(lambda x: (x * self.action_range) + self.action_low, name='actions')(raw_actions)
 
         # Create Keras model
-        self.model = tf.keras.Model(inputs=states, outputs=actions)
+        self.model = models.Model(inputs=states, outputs=actions)
 
         # Define loss function using action value (Q value) gradients
-        action_gradients = tf.keras.layers.Input(shape=(self.action_size,))
-        loss = tf.keras.backend.mean(-action_gradients * actions)
+        action_gradients = layers.Input(shape=(self.action_size,))
+        loss = backend.mean(-action_gradients * actions)
 
         # Incorporate any additional losses here (e.g. from regularizers)
-
-        # Had to create dummy output as TF2 was throwing errors without any outputs
-        dummy_outputs = tf.keras.backend.ones((self.action_size,))
+        dummy = backend.ones(shape=(self.action_size,))
 
         # Define optimizer and training function
-        optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
+        optimizer = optimizers.Adam(learning_rate=1e-4)
         updates_op = optimizer.get_updates(params=self.model.trainable_weights, loss=loss)
-        self.train_fn = tf.keras.backend.function(
-            inputs=[self.model.input, action_gradients, tf.keras.backend.learning_phase()],
-            outputs=[dummy_outputs],
+        self.train_fn = backend.function(
+            inputs=[self.model.input, action_gradients, backend.learning_phase()],
+            outputs=raw_actions,
             updates=updates_op)
